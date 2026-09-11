@@ -207,14 +207,22 @@ int main(int Argc, char** Argv)
   cout << "---------------------------------------" << endl;
   cout << endl;
 
-  cout << "Slow hardware threshold distribution:" << endl;
+  cout << "Hardware threshold distribution (keV):" << endl;
   cout << "  cSlowHardwareDist->Draw()" << endl;
   cout << endl;
 
-  cout << "Slow hardware threshold vs Strip:" << endl;
+  cout << "Hardware threshold vs Strip (keV):" << endl;
   cout << "  cSlowHardwareThresh->Draw()" << endl;
   cout << endl;
 
+  cout << "Hardware threshold distribution (ADC):" << endl;
+  cout << "  cSlowHardwareDistADC->Draw()" << endl;
+  cout << endl;
+
+  cout << "Hardware threshold vs Strip (ADC):" << endl;
+  cout << "  cSlowHardwareThreshADC->Draw()" << endl;
+  cout << endl;
+  
   cout << endl;
   cout << "FAST threshold diagnostics:" << endl;
   cout << "---------------------------------------" << endl;
@@ -1683,160 +1691,133 @@ void MStripThresholdFinder::FindFastThresholds()
 void MStripThresholdFinder::WriteCSV()
 {
 
-  if (m_SlowThresholds.empty() == true && m_FastThresholds.empty() == true) {
+  if (m_SlowThresholds.empty() == true &&
+      m_FastThresholds.empty() == true &&
+      m_SlowHardwareThresholds.empty() == true) {
     cout << "Warning: No thresholds available to write to CSV." << endl;
-  }
-
-  // -------------------------------------------------------------
-  // Write CSV threshold tables (HV and LV)
-  // -------------------------------------------------------------
-
-  MString HVOutputCSVFileName = m_OutputPrefix + "_Slow_HV_thresholds.csv";
-  MString LVOutputCSVFileName = m_OutputPrefix + "_Slow_LV_thresholds.csv";
-
-  ofstream csv_HV(HVOutputCSVFileName);
-  ofstream csv_LV(LVOutputCSVFileName);
-
-  if (csv_HV.is_open() == false) {
-    cerr << "Error: Failed to open CSV output file for HV thresholds: "
-         << HVOutputCSVFileName << endl;
     return;
   }
 
-  if (csv_LV.is_open() == false) {
-    cerr << "Error: Failed to open CSV output file for LV thresholds: "
-         << LVOutputCSVFileName << endl;
+
+  // -------------------------------------------------------------
+  // Write slow software threshold CSV table
+  // -------------------------------------------------------------
+
+  MString SlowOutputCSVFileName =
+    m_OutputPrefix + "_Slow_thresholds.csv";
+
+  ofstream csv_Slow(SlowOutputCSVFileName);
+
+  if (csv_Slow.is_open() == false) {
+    cerr << "Error: Failed to open slow threshold CSV output file: "
+         << SlowOutputCSVFileName << endl;
     return;
   }
 
-  /* CSV headers */
-
-  csv_HV << "detector_side,Strip,threshold_ADC,threshold_keV\n";
-  csv_LV << "detector_side,Strip,threshold_ADC,threshold_keV\n";
-
-  /* Write rows */
+  csv_Slow
+    << "Detector,detector_side,Strip,threshold_ADC,threshold_keV\n";
 
   for (const auto& kv : m_SlowThresholds) {
 
     MReadOutElementDoubleStrip R = kv.first;
+
+    unsigned int Detector = R.GetDetectorID();
     int Strip = R.GetStripID();
 
     double thr_keV = kv.second;
     double thr_ADC = m_SlowThresholdsADC[R];
 
-
-    if (R.IsLowVoltageStrip() == true) {
-      csv_LV << "l,"
-             << Strip << ","
-             << thr_ADC << ","
-             << thr_keV << "\n";
-    } else {
-      csv_HV << "h,"
-             << Strip << ","
-             << thr_ADC << ","
-             << thr_keV << "\n";
-    }
+    csv_Slow
+      << Detector << ","
+      << (R.IsLowVoltageStrip() == true ? "l" : "h") << ","
+      << Strip << ","
+      << thr_ADC << ","
+      << thr_keV << "\n";
   }
+
+  csv_Slow.close();
 
 
   // -------------------------------------------------------------
-  // Write SLOW hardware threshold CSV tables
+  // Write slow hardware threshold CSV table
   // -------------------------------------------------------------
 
-  MString HardwareHVOutputCSVFileName =
-    m_OutputPrefix + "_Slow_Hardware_HV_thresholds.csv";
+  MString HardwareOutputCSVFileName =
+    m_OutputPrefix + "_Hardware_thresholds.csv";
 
-  MString HardwareLVOutputCSVFileName =
-    m_OutputPrefix + "_Slow_Hardware_LV_thresholds.csv";
+  ofstream csv_Hardware(HardwareOutputCSVFileName);
 
-  ofstream csv_Hardware_HV(HardwareHVOutputCSVFileName);
-  ofstream csv_Hardware_LV(HardwareLVOutputCSVFileName);
-
-  if (csv_Hardware_HV.is_open() == false) {
-    cerr << "Error: Failed to open CSV output file for HV hardware thresholds: "
-         << HardwareHVOutputCSVFileName << endl;
+  if (csv_Hardware.is_open() == false) {
+    cerr << "Error: Failed to open hardware threshold CSV output file: "
+         << HardwareOutputCSVFileName << endl;
     return;
   }
 
-  if (csv_Hardware_LV.is_open() == false) {
-    cerr << "Error: Failed to open CSV output file for LV hardware thresholds: "
-         << HardwareLVOutputCSVFileName << endl;
-    return;
-  }
+  csv_Hardware
+    << "Detector,detector_side,Strip,threshold_ADC,threshold_keV\n";
 
-  // CSV headers
-  csv_Hardware_HV
-    << "detector_side,Strip,threshold_ADC,threshold_keV\n";
-
-  csv_Hardware_LV
-    << "detector_side,Strip,threshold_ADC,threshold_keV\n";
-
-  // Write rows
   for (const auto& kv : m_SlowHardwareThresholds) {
 
     MReadOutElementDoubleStrip R = kv.first;
+
+    unsigned int Detector = R.GetDetectorID();
     int Strip = R.GetStripID();
 
     double thr_keV = kv.second;
     double thr_ADC = m_SlowHardwareThresholdsADC[R];
 
-    if (R.IsLowVoltageStrip() == true) {
-
-      csv_Hardware_LV
-        << "l,"
-        << Strip << ","
-        << thr_ADC << ","
-        << thr_keV << "\n";
-
-    } else {
-
-      csv_Hardware_HV
-        << "h,"
-        << Strip << ","
-        << thr_ADC << ","
-        << thr_keV << "\n";
-    }
+    csv_Hardware
+      << Detector << ","
+      << (R.IsLowVoltageStrip() == true ? "l" : "h") << ","
+      << Strip << ","
+      << thr_ADC << ","
+      << thr_keV << "\n";
   }
 
+  csv_Hardware.close();
+
 
   // -------------------------------------------------------------
-  // Write Fast CSV threshold tables
+  // Write fast software threshold CSV table
   // -------------------------------------------------------------
 
-  // --- FAST CSV ---
-  ofstream csv_TAC_HV(m_OutputPrefix + "_Fast_HV_thresholds.csv");
-  ofstream csv_TAC_LV(m_OutputPrefix + "_Fast_LV_thresholds.csv");
+  MString FastOutputCSVFileName =
+    m_OutputPrefix + "_Fast_thresholds.csv";
 
-  csv_TAC_HV << "detector_side,Strip,threshold_ADC,threshold_keV\n";
-  csv_TAC_LV << "detector_side,Strip,threshold_ADC,threshold_keV\n";
+  ofstream csv_Fast(FastOutputCSVFileName);
 
-  cout << "Writing FAST CSV entries: " << m_FastThresholds.size() << endl;
+  if (csv_Fast.is_open() == false) {
+    cerr << "Error: Failed to open fast threshold CSV output file: "
+         << FastOutputCSVFileName << endl;
+    return;
+  }
+
+  csv_Fast
+    << "Detector,detector_side,Strip,threshold_ADC,threshold_keV\n";
+
+  cout << "Writing FAST CSV entries: "
+       << m_FastThresholds.size() << endl;
 
   for (const auto& kv : m_FastThresholds) {
+
     MReadOutElementDoubleStrip R = kv.first;
+
+    unsigned int Detector = R.GetDetectorID();
     int Strip = R.GetStripID();
 
     double thr_ADC = m_FastThresholdsADC[R];
     double thr_keV = kv.second;
 
-    if (R.IsLowVoltageStrip() == true) {
-      csv_TAC_LV << "l," << Strip << "," << thr_ADC << "," << thr_keV << "\n";
-    } else {
-      csv_TAC_HV << "h," << Strip << "," << thr_ADC << "," << thr_keV << "\n";
-    }
+    csv_Fast
+      << Detector << ","
+      << (R.IsLowVoltageStrip() == true ? "l" : "h") << ","
+      << Strip << ","
+      << thr_ADC << ","
+      << thr_keV << "\n";
   }
 
-
-  csv_HV.close();
-  csv_LV.close();
-
-  csv_Hardware_HV.close();
-  csv_Hardware_LV.close();
-
-  csv_TAC_HV.close();
-  csv_TAC_LV.close();
+  csv_Fast.close();
 }
-
 
 void MStripThresholdFinder::WriteDiagnostics()
 {
@@ -2118,6 +2099,131 @@ void MStripThresholdFinder::WriteDiagnostics()
   gSlowHardwareThresh_HV->Write();
 
   // -------------------------------------------------------------
+  // SLOW HARDWARE threshold per Strip in ADC (HV vs LV scatter)
+  // -------------------------------------------------------------
+
+  TGraph* gSlowHardwareThreshADC_LV = new TGraph();
+  TGraph* gSlowHardwareThreshADC_HV = new TGraph();
+
+  gSlowHardwareThreshADC_LV->SetName("SlowHardwareThreshADC_LV");
+  gSlowHardwareThreshADC_HV->SetName("SlowHardwareThreshADC_HV");
+
+  gSlowHardwareThreshADC_LV->SetTitle(
+    "Hardware Threshold per Strip;Strip;Hardware Threshold (ADC)");
+
+  gSlowHardwareThreshADC_LV->SetMarkerStyle(20);
+  gSlowHardwareThreshADC_LV->SetMarkerSize(1.0);
+  gSlowHardwareThreshADC_LV->SetMarkerColor(kBlue);
+
+  gSlowHardwareThreshADC_HV->SetMarkerStyle(20);
+  gSlowHardwareThreshADC_HV->SetMarkerSize(1.0);
+  gSlowHardwareThreshADC_HV->SetMarkerColor(kRed);
+
+
+  // Fill graphs
+  for (const auto& kv : m_SlowHardwareThresholdsADC) {
+
+    MReadOutElementDoubleStrip R = kv.first;
+
+    int Strip = R.GetStripID();
+    double ThresholdADC = kv.second;
+
+    // Ignore invalid hardware thresholds
+    if (ThresholdADC < 0.0) {
+      continue;
+    }
+
+    if (R.IsLowVoltageStrip() == true) {
+
+      gSlowHardwareThreshADC_LV->SetPoint(
+        gSlowHardwareThreshADC_LV->GetN(),
+        Strip,
+        ThresholdADC);
+
+    } else {
+
+      gSlowHardwareThreshADC_HV->SetPoint(
+        gSlowHardwareThreshADC_HV->GetN(),
+        Strip,
+        ThresholdADC);
+    }
+  }
+
+
+  // -------------------------------------------------------------
+  // Canvas with LV and HV overlaid
+  // -------------------------------------------------------------
+
+  TCanvas* cSlowHardwareThreshADC =
+    new TCanvas(
+      "cSlowHardwareThreshADC",
+      "Hardware Threshold per Strip ADC",
+      800,
+      600);
+
+  cSlowHardwareThreshADC->cd();
+
+  gSlowHardwareThreshADC_LV->Draw("AP");
+
+
+  // Determine plotting range
+  double hardwareADCYmin = 1e9;
+  double hardwareADCYmax = -1e9;
+
+  for (const auto& kv : m_SlowHardwareThresholdsADC) {
+
+    double v = kv.second;
+
+    if (v < 0.0) {
+      continue;
+    }
+
+    if (v < hardwareADCYmin) {
+      hardwareADCYmin = v;
+    }
+
+    if (v > hardwareADCYmax) {
+      hardwareADCYmax = v;
+    }
+  }
+
+  if (hardwareADCYmax > hardwareADCYmin) {
+
+    double hardwareADCPad =
+      0.10 * (hardwareADCYmax - hardwareADCYmin);
+
+    gSlowHardwareThreshADC_LV->GetYaxis()->SetRangeUser(
+      hardwareADCYmin - hardwareADCPad,
+      hardwareADCYmax + hardwareADCPad);
+  }
+
+  gSlowHardwareThreshADC_HV->Draw("P SAME");
+
+  TLegend* legSlowHardwareScatterADC =
+    new TLegend(0.70, 0.72, 0.80, 0.80);
+
+  legSlowHardwareScatterADC->AddEntry(
+    gSlowHardwareThreshADC_LV, "LV", "p");
+
+  legSlowHardwareScatterADC->AddEntry(
+    gSlowHardwareThreshADC_HV, "HV", "p");
+
+  legSlowHardwareScatterADC->SetTextSize(0.02);
+  legSlowHardwareScatterADC->SetBorderSize(1);
+  legSlowHardwareScatterADC->SetFillStyle(0);
+
+  legSlowHardwareScatterADC->Draw();
+
+  cSlowHardwareThreshADC->Modified();
+  cSlowHardwareThreshADC->Update();
+
+  cSlowHardwareThreshADC->Write();
+  gSlowHardwareThreshADC_LV->Write();
+  gSlowHardwareThreshADC_HV->Write();
+
+
+
+  // -------------------------------------------------------------
   // SLOW HARDWARE threshold distribution (HV vs LV separated)
   // -------------------------------------------------------------
 
@@ -2191,6 +2297,81 @@ void MStripThresholdFinder::WriteDiagnostics()
   cSlowHardwareDist->Write();
   hSlowHardwareDist_LV->Write();
   hSlowHardwareDist_HV->Write();
+
+  // -------------------------------------------------------------
+  // SLOW HARDWARE threshold distribution in ADC (HV vs LV separated)
+  // -------------------------------------------------------------
+
+  TH1D* hSlowHardwareDistADC_LV = new TH1D(
+    "SlowHardwareThresholdDistributionADC_LV",
+    "Hardware Threshold Distribution;Hardware Threshold (ADC);Counts",
+    100, 0, m_HistogramMaxADC);
+
+  TH1D* hSlowHardwareDistADC_HV = new TH1D(
+    "SlowHardwareThresholdDistributionADC_HV",
+    "Hardware Threshold Distribution;Hardware Threshold (ADC);Counts",
+    100, 0, m_HistogramMaxADC);
+
+
+  // Styling
+  hSlowHardwareDistADC_LV->SetLineColor(kBlue);
+  hSlowHardwareDistADC_LV->SetLineWidth(2);
+
+  hSlowHardwareDistADC_HV->SetLineColor(kRed);
+  hSlowHardwareDistADC_HV->SetLineWidth(2);
+
+
+  // Fill histograms
+  for (const auto& kv : m_SlowHardwareThresholdsADC) {
+
+    MReadOutElementDoubleStrip R = kv.first;
+    double ThresholdADC = kv.second;
+
+    if (ThresholdADC < 0.0) {
+      continue;
+    }
+
+    if (R.IsLowVoltageStrip() == true) {
+      hSlowHardwareDistADC_LV->Fill(ThresholdADC);
+    } else {
+      hSlowHardwareDistADC_HV->Fill(ThresholdADC);
+    }
+  }
+
+
+  // -------------------------------------------------------------
+  // Canvas with legend
+  // -------------------------------------------------------------
+
+  TCanvas* cSlowHardwareDistADC =
+    new TCanvas(
+      "cSlowHardwareDistADC",
+      "Hardware Threshold Distribution ADC",
+      800,
+      600);
+
+  cSlowHardwareDistADC->cd();
+
+  hSlowHardwareDistADC_LV->Draw("HIST");
+  hSlowHardwareDistADC_HV->Draw("HIST SAME");
+
+  TLegend* legSlowHardwareADC =
+    new TLegend(0.70, 0.72, 0.80, 0.80);
+
+  legSlowHardwareADC->AddEntry(
+    hSlowHardwareDistADC_LV, "LV", "l");
+
+  legSlowHardwareADC->AddEntry(
+    hSlowHardwareDistADC_HV, "HV", "l");
+
+  legSlowHardwareADC->Draw();
+
+  cSlowHardwareDistADC->Modified();
+  cSlowHardwareDistADC->Update();
+
+  cSlowHardwareDistADC->Write();
+  hSlowHardwareDistADC_LV->Write();
+  hSlowHardwareDistADC_HV->Write();
 
 
   // -------------------------------------------------------------
