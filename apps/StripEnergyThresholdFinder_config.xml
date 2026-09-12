@@ -8,10 +8,19 @@
     <CalibrationFile>/path/to/calibration/file.ecal</CalibrationFile>
     <StripMap>/path/to/stripmap.map</StripMap>
   </Input>
+
   <Output>
     <Prefix>your_output_file_prefix</Prefix>
   </Output>
+
   <Analysis>
+    <!-- Detector selection -->
+    <!-- If ProcessAllDetectors is false, only DetectorID is analyzed. -->
+    <!-- If ProcessAllDetectors is true, DetectorID is ignored. -->
+    <DetectorID>0</DetectorID>
+    <ProcessAllDetectors>false</ProcessAllDetectors>
+
+    <!-- Threshold analysis parameters -->
     <MinEntries>5</MinEntries>
     <FallbackThresholdKeV>18</FallbackThresholdKeV>
     <NoiseSearchMaxKeV>40</NoiseSearchMaxKeV>

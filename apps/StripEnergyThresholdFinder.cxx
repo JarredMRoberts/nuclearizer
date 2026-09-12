@@ -33,10 +33,12 @@
 #include <iostream>
 #include <fstream>
 #include <map>
+#include <set>
 #include <vector>
 #include <cmath>
 #include <string>
 #include <sstream>
+
 
 #include <filesystem>
 namespace fs = std::filesystem;
@@ -222,7 +224,7 @@ int main(int Argc, char** Argv)
   cout << "Hardware threshold vs Strip (ADC):" << endl;
   cout << "  cSlowHardwareThreshADC->Draw()" << endl;
   cout << endl;
-  
+
   cout << endl;
   cout << "FAST threshold diagnostics:" << endl;
   cout << "---------------------------------------" << endl;
@@ -677,6 +679,15 @@ bool MStripThresholdFinder::BuildHistograms()
     return false;
   }
 
+  // Get the available energy calibrations so that strip hits without a
+  // calibration can be excluded before running the energy calibrator.
+  map<MReadOutElementDoubleStrip, TF1*> CalibrationMap =
+    EnergyCalibrator->GetCalibration();
+
+  // Keep track of readout elements encountered without an energy calibration.
+  // These are reported once after all input files have been processed.
+  set<MReadOutElementDoubleStrip> uncalibratedReadouts;
+
   MReadOutAssembly* Event = new MReadOutAssembly();
 
   long event_counter = 0;
@@ -713,6 +724,45 @@ bool MStripThresholdFinder::BuildHistograms()
 
       if (Loader->IsReady() == true) {
         Loader->AnalyzeEvent(Event);
+
+        // -------------------------------------------------------------
+        // Remove strip hits with no energy calibration
+        // -------------------------------------------------------------
+
+        for (unsigned int i = 0; i < Event->GetNStripHits();) {
+
+          MStripHit* SH = Event->GetStripHit(i);
+
+          if (SH == nullptr) {
+            ++i;
+            continue;
+          }
+
+          MReadOutElementDoubleStrip R;
+          R.SetDetectorID(SH->GetDetectorID());
+          R.SetStripID(SH->GetStripID());
+          R.IsLowVoltageStrip(SH->IsLowVoltageStrip());
+
+          auto CalibrationIt = CalibrationMap.find(R);
+
+          if (CalibrationIt == CalibrationMap.end() ||
+              CalibrationIt->second == nullptr) {
+
+            // Record the readout so that it can be reported once at the
+            // end rather than printing a warning for every affected hit.
+            uncalibratedReadouts.insert(R);
+
+            Event->RemoveStripHit(i);
+            delete SH;
+
+            // Do not increment i here. Removing this hit shifts the next
+            // strip hit into the current index.
+            continue;
+          }
+
+          ++i;
+        }
+
         EnergyCalibrator->AnalyzeEvent(Event);
         event_counter++;
 
@@ -885,6 +935,26 @@ bool MStripThresholdFinder::BuildHistograms()
   }
   cout << "Accepted detector hits: "
        << acceptedDetectorHits << endl;
+
+  // Report channels that were present in the data but did not have
+  // an energy calibration. Each readout element is reported only once.
+  if (uncalibratedReadouts.empty() == false) {
+
+    cout << endl;
+    cout << "WARNING: Readout elements without energy calibration were "
+         << "excluded from threshold analysis:" << endl;
+
+    for (const auto& R : uncalibratedReadouts) {
+      cout << "  Detector " << R.GetDetectorID()
+           << " Side " << (R.IsLowVoltageStrip() ? "LV" : "HV")
+           << " Strip " << R.GetStripID()
+           << endl;
+    }
+
+    cout << "Total uncalibrated readout elements: "
+         << uncalibratedReadouts.size()
+         << endl;
+  }
 
   // Save into class
 
@@ -1336,6 +1406,15 @@ void MStripThresholdFinder::FindSlowThresholds()
 
       m_SlowHardwareThresholdsADC[R] = -1.0;
       m_SlowHardwareThresholds[R] = -1.0;
+
+	  cout << "WARNING: SLOW hardware threshold could not be determined for Det "
+           << R.GetDetectorID()
+           << " Side " << (R.IsLowVoltageStrip() ? "LV" : "HV")
+           << " Strip " << R.GetStripID()
+           << ": no valid 50% rising-edge crossing was found. "
+           << "Hardware threshold marked as invalid (-1)."
+           << endl;
+
     }
 
 
