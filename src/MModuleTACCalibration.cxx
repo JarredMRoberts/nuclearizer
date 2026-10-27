@@ -439,7 +439,7 @@ bool MModuleTACCalibration::LoadTACCalFile(MString FName)
       if ((Tokens.size() == 7) || (Tokens.size() == 8)) {
         int IndexOffset = Tokens.size() % 7;
         int DetID = Tokens[0+IndexOffset].ToInt();
-        MString SideString = Tokens[1+IndexOffset].Trim();
+        MString SideString = Tokens[1+IndexOffset];
         char Side;
         if (SideString.Length()!=1) {
           cout<<m_XmlTag<<": Error: Expected 1 character Side, got string \""<<SideString<<"\" in TAC calibration file."<<endl;

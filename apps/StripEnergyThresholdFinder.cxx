@@ -106,7 +106,7 @@ constexpr double FAST_MIN_DT1_FRACTION = 0.05;
 constexpr int FAST_FIRST_ADC_OFFSET = 20;
 constexpr int FAST_MIN_CROSSOVER_COUNTS = 50;
 constexpr int FAST_CROSSOVER_WINDOW_BINS = 21;
-constexpr int FAST_SEARCH_RANGE_ADC = 800;
+//constexpr int FAST_SEARCH_RANGE_ADC = 800;
 
 
 //! Class for determining strip energy thresholds from histogrammed data
@@ -145,6 +145,7 @@ class MStripThresholdFinder
   double m_HistogramMaxADC = 4096.0;
   double m_NoiseSearchMaxKeV = 40.0;
   double m_NoiseStartMinCounts = 50.0;
+  int m_FastSearchRangeADC = 800;
 
   long m_MaxEvents = -1;
 
@@ -371,6 +372,16 @@ bool MStripThresholdFinder::ParseCommandLine(int argc, char** argv)
     Node = AnalysisNode->GetNode("NoiseSearchMaxKeV");
     if (Node != nullptr) {
       m_NoiseSearchMaxKeV = Node->GetValueAsDouble();
+    }
+	
+	Node = AnalysisNode->GetNode("NoiseStartMinCounts");
+    if (Node != nullptr) {
+      m_NoiseStartMinCounts = Node->GetValueAsDouble();
+    }
+
+    Node = AnalysisNode->GetNode("FastSearchRangeADC");
+    if (Node != nullptr) {
+      m_FastSearchRangeADC = Node->GetValueAsInt();
     }
 
     Node = AnalysisNode->GetNode("FastFallbackKeV");
@@ -653,6 +664,12 @@ bool MStripThresholdFinder::ParseCommandLine(int argc, char** argv)
 
   cout << "  noise_search_max_keV:     "
        << m_NoiseSearchMaxKeV << endl;
+	   
+  cout << "  noise_start_min_counts:   "
+       << m_NoiseStartMinCounts << endl;
+
+  cout << "  fast_search_range_ADC:    "
+       << m_FastSearchRangeADC << endl;
 
   cout << "  histogram_bins:           "
        << m_HistogramBins << endl;
@@ -988,6 +1005,81 @@ bool MStripThresholdFinder::BuildHistograms()
          << uncalibratedReadouts.size()
          << endl;
   }
+  
+  // -------------------------------------------------------------
+  // Check for expected detector strips missing from calibration
+  //
+  // Unlike the warning above, this also identifies strips that
+  // never appeared in the data. This is useful for identifying
+  // known dead or disabled strips that have no energy calibration.
+  // -------------------------------------------------------------
+
+  set<MReadOutElementDoubleStrip> missingCalibrationStrips;
+
+  set<unsigned int> detectorsToCheck;
+
+  if (m_ProcessAllDetectors == true) {
+
+    // Check all detectors that were encountered in the data
+    for (const auto& entry : detectorHitCounts) {
+      detectorsToCheck.insert(entry.first);
+    }
+
+  } else {
+
+    // Check only the detector selected in the configuration
+    detectorsToCheck.insert(m_DetectorID);
+  }
+
+
+  // Check all central strips (0-63) on both detector sides.
+  // The guard ring (strip 64) is intentionally excluded here.
+  for (unsigned int detectorID : detectorsToCheck) {
+
+    for (int strip = 0; strip < GUARD_RING_STRIP_ID; ++strip) {
+
+      for (int side = 0; side < 2; ++side) {
+
+        MReadOutElementDoubleStrip R;
+        R.SetDetectorID(detectorID);
+        R.SetStripID(strip);
+        R.IsLowVoltageStrip(side == 0);
+
+        auto CalibrationIt = CalibrationMap.find(R);
+
+        if (CalibrationIt == CalibrationMap.end() ||
+            CalibrationIt->second == nullptr) {
+
+          missingCalibrationStrips.insert(R);
+        }
+      }
+    }
+  }
+
+
+  // Report strips that are completely absent from the calibration
+  if (missingCalibrationStrips.empty() == false) {
+
+    cout << endl;
+    cout << "WARNING: The following detector strips do not have an "
+         << "energy calibration:" << endl;
+
+    for (const auto& R : missingCalibrationStrips) {
+
+      cout << "  Detector " << R.GetDetectorID()
+           << " Side " << (R.IsLowVoltageStrip() ? "LV" : "HV")
+           << " Strip " << R.GetStripID()
+           << endl;
+    }
+
+    cout << "Please confirm that these are known dead or disabled strips."
+         << endl;
+
+    cout << "Total strips without energy calibration: "
+         << missingCalibrationStrips.size()
+         << endl;
+  }
+
 
   // Save into class
 
@@ -1721,7 +1813,7 @@ void MStripThresholdFinder::FindFastThresholds()
     const int nbins = FAST_CROSSOVER_WINDOW_BINS;
 
     // Extend search window for stability
-    int searchMax = m_SlowThresholdsADC[R] + FAST_SEARCH_RANGE_ADC;
+    int searchMax = m_SlowThresholdsADC[R] + m_FastSearchRangeADC;
 
     for (int ADC = m_SlowThresholdsADC[R] ; ADC < searchMax; ADC++) {
       int n_dt0 = 0;
