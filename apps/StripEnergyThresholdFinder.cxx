@@ -4223,6 +4223,7 @@ void MStripThresholdFinder::WriteDiagnostics()
   cFastThresh_all->Update();
   cFastThresh_all->Write();
 
+
   if (m_SaveDiagnosticPlots == true) {
 
     fs::path filename =
